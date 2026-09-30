@@ -5,6 +5,17 @@
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
     "editor.formatOnSave": true
   },
+
   "rust-analyzer.check.command": "clippy",
-  "rust-analyzer.check.allTargets": true
+  "rust-analyzer.check.allTargets": true,
+
+  // VS Code Server 是非 login shell 啟動，抓不到 rustup 裝在 ~/.cargo/bin 的 toolchain，
+  // 會出現 "Failed to find sysroot"。明確補進 PATH。
+  "rust-analyzer.server.extraEnv": {
+    "PATH": "${userHome}/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+  },
+
+  // rust-analyzer 背景跑的 clippy 會跟手動 `cargo build` 搶 target/ 的 lock，
+  // 造成其中一邊卡住。分開 target 目錄就不會互相阻塞。
+  "rust-analyzer.cargo.targetDir": true
 }
