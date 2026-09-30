@@ -1,0 +1,35 @@
+# Dev container: keeps a long-running shell; run cargo build / cargo run inside it.
+#
+#   docker compose up -d          # start (builds the image on first run)
+#   docker compose exec dev bash  # enter the container
+#   docker compose down           # stop
+#
+# After changing docker/cargo/Dockerfile: docker compose up -d --build
+services:
+  dev:
+    build: docker/cargo
+    # Shares the same image with scripts/cargo
+    image: syncai-ble-cargo:latest
+    # The Dockerfile ENTRYPOINT is cargo; override with bash to keep the container running
+    entrypoint: ["bash"]
+    tty: true
+    stdin_open: true
+    # Run as the host UID/GID so target/ isn't owned by root.
+    # bash doesn't export UID, so default to 1000 (host user syncrobotic).
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /work
+    volumes:
+      # Mount the whole project (cargo needs Cargo.toml, Cargo.lock and src/)
+      - .:/work
+      # Host system D-Bus, so cargo run can drive Bluetooth through the host's BlueZ
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # Crate download cache, survives container rebuilds
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+
+volumes:
+  # Explicit names so these are the same volumes scripts/cargo uses
+  cargo-registry:
+    name: syncai-ble-cargo-registry
+  cargo-git:
+    name: syncai-ble-cargo-git

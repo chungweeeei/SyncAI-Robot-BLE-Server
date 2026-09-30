@@ -1,0 +1,15 @@
+# Allow the BLE server to scan, connect and save Wi-Fi settings via NetworkManager without a password.
+#
+# Ubuntu 22.04 ships polkit 0.105, which only supports .pkla (not JavaScript rules in rules.d).
+# Install:
+#   sudo install -m 644 deploy/polkit/50-syncai-ble-server.pkla /etc/polkit-1/localauthority/50-local.d/
+#   sudo systemctl restart polkit
+#
+# ResultAny must be yes: processes started from a container, SSH or systemd are not part of a
+# local login session, so polkit applies the ResultAny field.
+[Allow SyncAI BLE server to manage Wi-Fi]
+Identity=unix-user:syncrobotic
+Action=org.freedesktop.NetworkManager.wifi.scan;org.freedesktop.NetworkManager.network-control;org.freedesktop.NetworkManager.settings.modify.system
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes

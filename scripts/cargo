@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Run cargo inside a container, same usage as cargo:
+#   scripts/cargo build
+#   scripts/cargo clippy
+#   scripts/cargo test
+#   scripts/cargo run      # run the BLE server via the host's BlueZ
+#
+# The image is built automatically on first run. Rebuild after changing the Dockerfile:
+#   CARGO_IMAGE_REBUILD=1 scripts/cargo build
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGE="${CARGO_IMAGE:-syncai-ble-cargo:latest}"
+
+if [[ -n "${CARGO_IMAGE_REBUILD:-}" ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    docker build -t "$IMAGE" "$REPO_ROOT/docker/cargo"
+fi
+
+# Only pass -t when attached to a terminal, so this also works in CI or a pipe
+tty_flag=()
+[[ -t 0 && -t 1 ]] && tty_flag=(-t)
+
+# Mount the host system D-Bus socket so `scripts/cargo run` can use Bluetooth via the host's BlueZ.
+# BlueZ's D-Bus policy allows regular users by default, so neither root nor --privileged is needed.
+# --network host: exposes the host Wi-Fi interface in /proc/net/wireless (for the real RSSI in dBm).
+exec docker run --rm -i "${tty_flag[@]}" \
+    --user "$(id -u):$(id -g)" \
+    --network host \
+    -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
+    -v "$REPO_ROOT:/work" \
+    -v syncai-ble-cargo-registry:/usr/local/cargo/registry \
+    -v syncai-ble-cargo-git:/usr/local/cargo/git \
+    -w /work \
+    "$IMAGE" "$@"
