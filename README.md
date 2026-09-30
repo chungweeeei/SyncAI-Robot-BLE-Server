@@ -1,5 +1,49 @@
 # SyncAI-Robot-BLE-Server
 
+在機器人（Ubuntu 22.04）上執行的 BLE GATT server，讓手機透過藍牙查詢和設定機器人的 Wi-Fi。
+
+- 藍牙：透過 [bluer](https://docs.rs/bluer) 操作主機的 BlueZ
+- 網路：透過 [nmrs](https://docs.rs/nmrs) 操作 NetworkManager
+
+## GATT 介面
+
+Primary service UUID：`12345678-1234-5678-1234-56789abcdef0`（廣播名稱目前是 `test`）
+
+| Characteristic | UUID | 屬性 | 內容 |
+|---|---|---|---|
+| NetworkStatus | `1234abcd-0001-0000-8000-00805f9b34fb` | read | `{"connected":true,"ssid":"...","signal":-50,"ip":"192.168.1.23"}`，`signal` 是 RSSI（dBm） |
+| AvailableNetworks | `1234abcd-0002-0000-8000-00805f9b34fb` | notify（IO 模式） | 訂閱後每輪 rescan 推送一次 `[{"ssid":"...","signal":80,"secured":true}, ...]`，`signal` 是 NM 強度（0-100），依 MTU 切段，以 `\n` 結尾 |
+| Command | `1234abcd-0000-0000-8000-00805f9b34fb` | write | JSON 指令，最長 512 bytes，必須一次寫完（offset 要是 0） |
+
+Command 格式：
+
+```json
+{"cmd": "set_wifi", "id": 1, "ssid": "MyWiFi", "password": "secret"}
+{"cmd": "disconnect", "id": 2}
+```
+
+- `ssid` 長度 1-32 bytes、`password` 最多 63 bytes，空字串代表開放網路。
+- 格式錯誤回 `NotSupported`、太長回 `InvalidValueLength`、SSID/密碼不合法回 `Failed`。
+- 目前進度：`set_wifi` 只解析和驗證（還沒真的切換網路），`disconnect` 尚未實作。
+
+## 專案結構
+
+```
+src/
+  main.rs      建立 NM / BlueZ session、廣播、註冊 GATT application
+  config.rs    Service 與 characteristic 的 UUID
+  handler.rs   三個 characteristic 的 read / notify / write 處理
+  setting.rs   Command 的 JSON 解析與驗證
+  scan.rs      觸發 Wi-Fi rescan 並等待 NM 的 LastScan 更新
+  wifi.rs      透過 NM 切換 Wi-Fi
+  helper.rs    解析 /proc/net/wireless 取得 RSSI
+examples/
+  gatt_client.rs   測試用 GATT client
+deploy/polkit/     NetworkManager 的 polkit 規則
+docker/cargo/      cargo 開發容器
+docs/              學習筆記（見 docs/README.md）
+```
+
 ## Build（不用在主機安裝 Rust）
 
 用 `scripts/cargo` 在容器裡執行 cargo，用法跟 cargo 一樣：
@@ -68,3 +112,19 @@ sudo ./target/debug/SyncAI-Robot-BLE-Server
 ```
 
 正式部署時，通常會用 systemd service 以 root 或專用帳號身分執行。
+
+## 用 GATT client 測試
+
+`examples/gatt_client.rs` 要在**另一台**有藍牙的 Linux 上跑（同一張 adapter 不能連自己）：
+
+```bash
+cargo run --example gatt_client -- status              # 讀 NetworkStatus
+cargo run --example gatt_client -- scan 3              # 訂閱 AvailableNetworks，收 3 輪
+cargo run --example gatt_client -- set <ssid> [password]
+cargo run --example gatt_client -- disconnect
+cargo run --example gatt_client -- raw '<json>'        # 送任意內容，測試錯誤處理
+```
+
+預設會掃描廣播 primary service UUID 的裝置，也可以用 `BLE_ADDR=AA:BB:CC:DD:EE:FF` 指定 server。
+
+也可以用手機的 **nRF Connect** App 直接連線測試。
