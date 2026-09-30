@@ -1,5 +1,5 @@
-/// 解析 /proc/net/wireless，格式：
-/// ` wlP1p1s0: 0000   60.  -50.  -256 ...`（第 4 個欄位是 signal level）
+/// Parse /proc/net/wireless, whose lines look like:
+/// ` wlP1p1s0: 0000   60.  -50.  -256 ...` (the 4th field is the signal level)
 pub fn parse_rssi_dbm(text: &str, iface: &str) -> Option<i32> {
     let prefix = format!("{iface}:");
     text.lines()

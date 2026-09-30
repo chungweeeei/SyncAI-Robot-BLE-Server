@@ -28,7 +28,7 @@ struct NetworkStatus {
     ip: Option<String>,
 }
 
-/// 從 /proc/net/wireless 讀取介面目前的 RSSI（dBm）
+/// Read the interface's current RSSI (dBm) from /proc/net/wireless
 async fn read_rssi_dbm(iface: &str) -> Option<i32> {
     let text = tokio::fs::read_to_string("/proc/net/wireless").await.ok()?;
     parse_rssi_dbm(&text, iface)
@@ -67,7 +67,7 @@ pub async fn read_network_status(
     serde_json::to_vec(&status).map_err(|_| ReqError::Failed)
 }
 
-/// 每一輪送完之後，等多久再重新掃描
+/// How long to wait after each round before rescanning
 const RESCAN_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Serialize)]
@@ -91,8 +91,8 @@ pub async fn serve_available_networks(nm: NetworkManager, control: Characteristi
 }
 
 async fn notify_available_networks(nm: NetworkManager, writer: CharacteristicWriter) {
-    // IO 模式拿得到這個 client 協商後的 MTU，
-    // bluer 的 send() 規定一次最多 mtu() bytes，所以直接用它當 chunk 大小
+    // IO mode exposes the MTU negotiated with this client, and bluer's send()
+    // accepts at most mtu() bytes per call, so use it as the chunk size
     let chunk_len = writer.mtu();
     println!("Notification session start from {} (mtu={chunk_len})", writer.device_address());
 
@@ -104,7 +104,7 @@ async fn notify_available_networks(nm: NetworkManager, writer: CharacteristicWri
         }
     };
 
-    // is_closed() 出錯也當作連線已經結束
+    // Treat an is_closed() error as the connection having ended
     while !writer.is_closed().unwrap_or(true) {
         let networks = match scan::rescan(&nm, &conn).await {
             Ok(networks) => networks,
@@ -141,11 +141,11 @@ async fn notify_available_networks(nm: NetworkManager, writer: CharacteristicWri
     println!("Notification session stopped by client");
 }
 
-/// Command characteristic 的 write callback。
+/// Write callback for the Command characteristic.
 ///
-/// 只負責解析和檢查 Command，格式錯誤就回傳錯誤給手機；
-/// 真正耗時的操作（連線最多 30 秒）丟到背景 task，這裡馬上回傳 Ok，
-/// 避免超過 ATT 的 30 秒逾時。
+/// Only parses and validates the Command, returning an error to the phone if it's malformed.
+/// Slow operations (connecting can take up to 30 s) go to a background task and this returns
+/// Ok immediately, to stay within the 30 s ATT timeout.
 pub async fn write_command(
     _nm: NetworkManager,
     value: Vec<u8>,
@@ -154,7 +154,7 @@ pub async fn write_command(
     println!("Command write from {} ({} bytes, mtu={}, offset={})",
              req.device_address, value.len(), req.mtu, req.offset);
 
-    // 還不支援分段寫入（Prepare Write），整個 Command 要一次寫完
+    // Long writes (Prepare Write) aren't supported yet; the whole Command must arrive in one write
     if req.offset != 0 {
         return Err(ReqError::InvalidOffset);
     }

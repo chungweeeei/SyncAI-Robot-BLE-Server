@@ -50,7 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     println!("Serving GATT service on Bluetooth adapter {}", adapter.name());
 
 
-    // AvailableNetworks 用 IO 模式：control 端拿來收訂閱事件，handle 端交給 Characteristic
+    // AvailableNetworks uses IO mode: the control end receives subscription events,
+    // the handle end is given to the Characteristic
     let (networks_control, networks_handle) = characteristic_control();
 
     let app = Application {

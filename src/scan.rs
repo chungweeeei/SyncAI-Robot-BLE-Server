@@ -6,18 +6,18 @@ use tokio::time::{Instant, sleep};
 const NM_SERVICE: &str = "org.freedesktop.NetworkManager";
 const NM_WIRELESS_IFACE: &str = "org.freedesktop.NetworkManager.Device.Wireless";
 
-/// 等待掃描完成的上限，超過就直接用目前 NM 手上的清單
+/// Max time to wait for a scan to finish; after that, use whatever list NM currently has
 const SCAN_TIMEOUT: Duration = Duration::from_secs(15);
 const SCAN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
-/// 觸發 Wi-Fi rescan，等掃描完成後回傳目前看得到的網路。
+/// Trigger a Wi-Fi rescan and return the visible networks once the scan completes.
 ///
-/// `nm.scan_networks()` 只會送出 RequestScan 就回傳，不會等掃描結束，
-/// 所以這裡另外讀 NM 的 `LastScan` 屬性（每次掃描完成都會更新），
-/// 等它改變才去拿清單。
+/// `nm.scan_networks()` returns right after sending RequestScan without waiting for the scan,
+/// so this reads NM's `LastScan` property (updated whenever a scan finishes) and fetches the
+/// list once it changes.
 ///
-/// `conn` 是自己開的 system bus 連線（nmrs 沒有公開它內部的連線），
-/// 由呼叫端建立一次後重複使用。
+/// `conn` is our own system bus connection (nmrs doesn't expose its internal one); the caller
+/// creates it once and reuses it.
 pub async fn rescan(nm: &NetworkManager, conn: &zbus::Connection) -> nmrs::Result<Vec<Network>> {
     let Some(dev) = nm.list_wireless_devices().await?.into_iter().next() else {
         return Ok(Vec::new());
@@ -38,12 +38,12 @@ pub async fn rescan(nm: &NetworkManager, conn: &zbus::Connection) -> nmrs::Resul
                 }
             }
         }
-        // NM 會拒絕太頻繁的 RequestScan，這時沿用 NM 目前的結果就好
+        // NM rejects RequestScan calls that come too often; just reuse NM's current results
         Err(e) => println!("Wi-Fi rescan request failed, using cached results: {e}"),
     }
 
     let mut networks = wifi.list_networks().await?;
-    networks.retain(|n| !n.ssid.is_empty()); // 隱藏的 SSID
+    networks.retain(|n| !n.ssid.is_empty()); // hidden SSIDs
     networks.sort_by(|a, b| b.strength.cmp(&a.strength));
     Ok(networks)
 }

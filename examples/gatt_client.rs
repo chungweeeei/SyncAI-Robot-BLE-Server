@@ -1,14 +1,15 @@
-//! 測試用的 GATT client，在「另一台」有藍牙的 Linux 上跑（同一張 adapter 不能連自己）。
+//! GATT client for testing. Run it on a *different* Linux machine with Bluetooth
+//! (an adapter can't connect to itself).
 //!
-//! 用法：
+//! Usage:
 //!   cargo run --example gatt_client -- status
-//!   cargo run --example gatt_client -- scan [輪數，預設 1]
+//!   cargo run --example gatt_client -- scan [rounds, default 1]
 //!   cargo run --example gatt_client -- set <ssid> [password]
 //!   cargo run --example gatt_client -- disconnect
-//!   cargo run --example gatt_client -- raw '<json>'     # 送任意內容，測試錯誤處理
+//!   cargo run --example gatt_client -- raw '<json>'     # send arbitrary data to test error handling
 //!
-//! 預設會掃描廣播 PRIMARY_SERVICE_UUID 的裝置；
-//! 設定 BLE_ADDR=AA:BB:CC:DD:EE:FF 可以直接指定要連的 server。
+//! By default it scans for a device advertising PRIMARY_SERVICE_UUID;
+//! set BLE_ADDR=AA:BB:CC:DD:EE:FF to connect to a specific server.
 
 use std::{env, time::Duration};
 
@@ -16,15 +17,15 @@ use bluer::{Adapter, AdapterEvent, Address, Device, Uuid, gatt::remote::Characte
 use futures::{StreamExt, pin_mut};
 use tokio::time::timeout;
 
-// examples 沒辦法 `use` binary crate 裡的 module（沒有 lib.rs），
-// 所以 UUID 先複製一份，要跟 src/config.rs 保持一致。
+// Examples can't `use` modules from a binary crate (there's no lib.rs),
+// so the UUIDs are copied here and must stay in sync with src/config.rs.
 const PRIMARY_SERVICE_UUID: Uuid = Uuid::from_u128(0x12345678_1234_5678_1234_56789abcdef0);
 const COMMAND_UUID: Uuid = Uuid::from_u128(0x1234abcd_0000_0000_8000_00805f9b34fb);
 const NETWORK_STATUS_UUID: Uuid = Uuid::from_u128(0x1234abcd_0001_0000_8000_00805f9b34fb);
 const AVAILABLE_NETWORKS_UUID: Uuid = Uuid::from_u128(0x1234abcd_0002_0000_8000_00805f9b34fb);
 
 const DISCOVER_TIMEOUT: Duration = Duration::from_secs(20);
-/// server 每一輪要先等 Wi-Fi 掃描完（最多 15 秒）才會 notify
+/// Each round the server waits for the Wi-Fi scan to finish (up to 15 s) before notifying
 const NOTIFY_TIMEOUT: Duration = Duration::from_secs(30);
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -80,7 +81,7 @@ async fn main() -> Result<()> {
 
     let result = run(&device, action).await;
 
-    // 不管成功或失敗都斷線，server 端才看得到連線結束
+    // Always disconnect, success or not, so the server sees the connection end
     let _ = device.disconnect().await;
     result
 }
@@ -95,7 +96,7 @@ async fn run(device: &Device, action: Action) -> Result<()> {
         Action::Write(payload) => {
             let ch = find_characteristic(device, COMMAND_UUID).await?;
             println!("Writing {} bytes: {}", payload.len(), String::from_utf8_lossy(&payload));
-            // server 回傳的 ReqError 會變成這裡的 Err，例如 NotSupported
+            // A ReqError returned by the server shows up here as Err, e.g. NotSupported
             match ch.write(&payload).await {
                 Ok(()) => println!("Write OK"),
                 Err(e) => println!("Write rejected by server: {e}"),
@@ -109,8 +110,8 @@ async fn run(device: &Device, action: Action) -> Result<()> {
     Ok(())
 }
 
-/// 訂閱 AvailableNetworks。server 會把一份 JSON 切成 20 bytes 一段送過來，
-/// 最後一段以 '\n' 結尾，所以這裡把收到的片段接起來，遇到 '\n' 才算一輪。
+/// Subscribe to AvailableNetworks. The server splits each JSON payload into MTU-sized chunks
+/// and ends the last one with '\n', so chunks are joined until a '\n' completes a round.
 async fn receive_networks(ch: &Characteristic, rounds: usize) -> Result<()> {
     println!("Subscribing to AvailableNetworks (waiting for {rounds} round(s)) ...");
     let notify = ch.notify().await?;
@@ -125,14 +126,14 @@ async fn receive_networks(ch: &Characteristic, rounds: usize) -> Result<()> {
         };
         buf.extend_from_slice(&chunk);
 
-        // 一個 chunk 裡理論上只會有一個 '\n'，但用迴圈處理比較保險
+        // A chunk should contain at most one '\n', but loop anyway to be safe
         while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
             let line: Vec<u8> = buf.drain(..=pos).collect();
             done += 1;
             print_networks(&line[..line.len() - 1], done);
         }
     }
-    // notify 這個 stream 被 drop 時，bluer 會自動送出 StopNotify
+    // bluer sends StopNotify automatically when the notify stream is dropped
     Ok(())
 }
 
@@ -150,12 +151,12 @@ fn print_networks(json: &[u8], round: usize) {
     }
 }
 
-/// 有設定 BLE_ADDR 就直接用；否則開始掃描，找第一個廣播我們 service UUID 的裝置
+/// Use BLE_ADDR if set; otherwise scan for the first device advertising our service UUID
 async fn find_server(adapter: &Adapter) -> Result<Device> {
     if let Ok(addr) = env::var("BLE_ADDR") {
         let addr: Address = addr.parse()?;
         println!("Using BLE_ADDR={addr}");
-        // 要先掃描過，BlueZ 才會有這個裝置的 D-Bus 物件
+        // BlueZ only has a D-Bus object for the device after it has been discovered
         let events = adapter.discover_devices().await?;
         pin_mut!(events);
         timeout(DISCOVER_TIMEOUT, async {
@@ -188,11 +189,11 @@ async fn find_server(adapter: &Adapter) -> Result<Device> {
     .await?;
 
     found.ok_or_else(|| "discovery stream ended without finding the server".into())
-    // `events` 在這裡被 drop，掃描也跟著停止
+    // `events` is dropped here, which also stops discovery
 }
 
 async fn find_characteristic(device: &Device, uuid: Uuid) -> Result<Characteristic> {
-    // services() 會等 BlueZ 把 GATT database 解析完才回傳
+    // services() waits until BlueZ has resolved the GATT database
     for service in device.services().await? {
         if service.uuid().await? != PRIMARY_SERVICE_UUID {
             continue;

@@ -1,34 +1,34 @@
-# 開發用容器：開一個常駐的 shell，進去之後直接 cargo build / cargo run。
+# Dev container: keeps a long-running shell; run cargo build / cargo run inside it.
 #
-#   docker compose up -d          # 啟動（第一次會 build image）
-#   docker compose exec dev bash  # 進入容器
-#   docker compose down           # 停止
+#   docker compose up -d          # start (builds the image on first run)
+#   docker compose exec dev bash  # enter the container
+#   docker compose down           # stop
 #
-# 改了 docker/cargo/Dockerfile 之後：docker compose up -d --build
+# After changing docker/cargo/Dockerfile: docker compose up -d --build
 services:
   dev:
     build: docker/cargo
-    # 和 scripts/cargo 共用同一個 image
+    # Shares the same image with scripts/cargo
     image: syncai-ble-cargo:latest
-    # Dockerfile 的 ENTRYPOINT 是 cargo，這裡換成 bash 讓容器常駐
+    # The Dockerfile ENTRYPOINT is cargo; override with bash to keep the container running
     entrypoint: ["bash"]
     tty: true
     stdin_open: true
-    # 用主機的 UID/GID 執行，target/ 才不會變成 root 擁有。
-    # bash 的 UID 沒有 export，所以預設給 1000（主機 syncrobotic）。
+    # Run as the host UID/GID so target/ isn't owned by root.
+    # bash doesn't export UID, so default to 1000 (host user syncrobotic).
     user: "${UID:-1000}:${GID:-1000}"
     working_dir: /work
     volumes:
-      # 整個專案掛進去（cargo 需要 Cargo.toml、Cargo.lock 和 src/）
+      # Mount the whole project (cargo needs Cargo.toml, Cargo.lock and src/)
       - .:/work
-      # 主機的 system D-Bus，cargo run 時透過主機的 BlueZ 操作藍牙
+      # Host system D-Bus, so cargo run can drive Bluetooth through the host's BlueZ
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
-      # 下載過的 crate 快取，重建容器也不用重新下載
+      # Crate download cache, survives container rebuilds
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
 
 volumes:
-  # 指定 name，跟 scripts/cargo 用的 volume 是同一個
+  # Explicit names so these are the same volumes scripts/cargo uses
   cargo-registry:
     name: syncai-ble-cargo-registry
   cargo-git:
