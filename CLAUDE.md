@@ -1,44 +1,43 @@
 # CLAUDE.md
 
-機器人上的 BLE GATT server（Rust），讓手機透過藍牙查詢/設定 Wi-Fi。藍牙用 `bluer`（BlueZ），網路用 `nmrs`（NetworkManager）。目標平台是 Ubuntu 22.04。GATT 介面與 Command 格式見 `README.md`。
+A BLE GATT server (Rust) running on the robot that lets a phone query/configure Wi-Fi over Bluetooth. Bluetooth goes through `bluer` (BlueZ), networking through `nmrs` (NetworkManager). Target platform is Ubuntu 22.04. See `README.md` for the GATT interface and Command format.
 
-## 常用指令
+## Common commands
 
-主機不裝 Rust，一律透過容器跑 cargo（第一次會自動 build image）：
+Rust is not installed on the host; always run cargo through the container (the image is built automatically on first run):
 
 ```bash
 scripts/cargo build
 scripts/cargo clippy
 scripts/cargo test
 scripts/cargo fmt
-scripts/cargo run        # 透過主機 D-Bus 使用主機的 BlueZ / NM
+scripts/cargo run        # uses the host's BlueZ / NM via the host D-Bus
 ```
 
-- 修改 `docker/cargo/Dockerfile` 後：`CARGO_IMAGE_REBUILD=1 scripts/cargo build`
-- 開發機若是 macOS，無法實際執行 BLE / NM 相關功能，只能 build、clippy 和跑單元測試。
-- 實機測試要用另一台 Linux 跑 `cargo run --example gatt_client -- <status|scan|set|disconnect|raw>`。
-- NM 操作出現 `not authorized` 時，是 polkit 權限問題，見 README 的「NetworkManager 權限」。
+- After changing `docker/cargo/Dockerfile`: `CARGO_IMAGE_REBUILD=1 scripts/cargo build`
+- On a macOS dev machine, BLE / NM features can't actually run; only build, clippy and unit tests.
+- For on-device testing, run `cargo run --example gatt_client -- <status|scan|set|disconnect|raw>` on a separate Linux machine.
+- `not authorized` errors from NM operations are polkit permission issues; see "NetworkManager permissions" in the README.
 
-## 架構
+## Architecture
 
-- `main.rs`：建立 NM 與 bluer session、廣播、組 `Application`，stdin 按 enter 結束（drop handle 會移除 service/廣播）。
-- `handler.rs`：
-  - `read_network_status`：cb 模式 read，回傳 JSON。
-  - `serve_available_networks`：IO 模式 notify，每個訂閱 spawn 一個 task，rescan → JSON → 依 `writer.mtu()` 切段送出，以 `\n` 結尾。
-  - `write_command`：cb 模式 write，只負責解析/驗證；耗時操作（NM 連線最多 30 秒）必須丟到背景 task，否則會超過 ATT 30 秒逾時。
-- `setting.rs`：`Command`（serde `tag = "cmd"`、`snake_case`、`deny_unknown_fields`）與 `CommandError → ReqError` 的對應。
-- `scan.rs`：`nm.scan_networks()` 不會等掃描完成，所以另外讀 D-Bus 的 `LastScan` 屬性輪詢，最多等 15 秒。
-- `wifi.rs`：`switch_network`，空密碼視為開放網路，否則 WPA-PSK。
-- `config.rs`：UUID。**`examples/gatt_client.rs` 有一份複製的 UUID**（binary crate 沒有 lib.rs），改 UUID 時兩邊要同步。
+- `main.rs`: sets up NM and bluer sessions, advertises, builds the `Application`; pressing enter on stdin exits (dropping the handles removes the service/advertisement).
+- `handler.rs`:
+  - `read_network_status`: callback-mode read, returns JSON.
+  - `serve_available_networks`: IO-mode notify; spawns one task per subscription: rescan → JSON → send in `writer.mtu()`-sized chunks, terminated by `\n`.
+  - `write_command`: callback-mode write, only parses/validates; slow operations (NM connect takes up to 30 s) must go to a background task, otherwise the 30 s ATT timeout is exceeded.
+- `setting.rs`: `Command` (serde `tag = "cmd"`, `snake_case`, `deny_unknown_fields`) and the `CommandError → ReqError` mapping.
+- `scan.rs`: `nm.scan_networks()` doesn't wait for the scan to finish, so it polls the D-Bus `LastScan` property, waiting up to 15 s.
+- `wifi.rs`: `switch_network`; an empty password means an open network, otherwise WPA-PSK.
+- `config.rs`: UUIDs. **`examples/gatt_client.rs` has a copy of the UUIDs** (the binary crate has no lib.rs), so keep both in sync when changing them.
 
-目前進度：`set_wifi` 只驗證、尚未呼叫 `wifi::switch_network`；`disconnect` 回 `NotSupported`。
+Current status: `set_wifi` only validates and doesn't call `wifi::switch_network` yet; `disconnect` returns `NotSupported`.
 
-## 慣例
+## Conventions
 
-- Runtime 是 `tokio` 的 `current_thread`。
-- Lint：`unsafe_code = "forbid"`、`unused_must_use = "deny"`、clippy `all` + `pedantic`（warn）。改完要跑 `scripts/cargo clippy` 確認沒有新 warning。
-- 格式：`rustfmt.toml`（`max_width = 100`）。
-- 程式碼與設定檔的註解一律用英文；README、`docs/` 等文件用繁體中文。風格簡潔。
-- Commit message 遵循 Conventional Commits（`feat:`、`fix:`、`docs:`、`build:`、`chore:` …，可加 scope），見 `.github/prompt/copilot-commit-message-instructions.md`。
-- 分支：功能開在 feature branch，PR 回 `dev`。
-- `docs/` 是學習筆記（bluer、Rust 觀念、設計），不是 API 文件。
+- The runtime is `tokio` `current_thread`.
+- Lints: `unsafe_code = "forbid"`, `unused_must_use = "deny"`, clippy `all` + `pedantic` (warn). Run `scripts/cargo clippy` after changes and make sure there are no new warnings.
+- Formatting: `rustfmt.toml` (`max_width = 100`).
+- All comments and documentation are in English. Keep them concise.
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `build:`, `chore:` …, optional scope); see `.github/prompt/copilot-commit-message-instructions.md`.
+- Branching: work on a feature branch and open PRs against `dev`.
