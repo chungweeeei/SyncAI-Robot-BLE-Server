@@ -38,7 +38,7 @@ scripts/cargo run        # 透過主機 D-Bus 使用主機的 BlueZ / NM
 - Runtime 是 `tokio` 的 `current_thread`。
 - Lint：`unsafe_code = "forbid"`、`unused_must_use = "deny"`、clippy `all` + `pedantic`（warn）。改完要跑 `scripts/cargo clippy` 確認沒有新 warning。
 - 格式：`rustfmt.toml`（`max_width = 100`）。
-- 程式碼與設定檔的註解一律用英文；README、`docs/` 等文件用繁體中文。風格簡潔。
+- 程式碼與設定檔的註解、README 一律用英文；`docs/` 學習筆記用繁體中文。風格簡潔。
 - Commit message 遵循 Conventional Commits（`feat:`、`fix:`、`docs:`、`build:`、`chore:` …，可加 scope），見 `.github/prompt/copilot-commit-message-instructions.md`。
 - 分支：功能開在 feature branch，PR 回 `dev`。
 - `docs/` 是學習筆記（bluer、Rust 觀念、設計），不是 API 文件。
