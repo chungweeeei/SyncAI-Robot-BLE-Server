@@ -41,7 +41,6 @@ examples/
   gatt_client.rs   GATT client for testing
 deploy/polkit/     polkit rule for NetworkManager
 docker/cargo/      cargo dev container
-docs/              Learning notes (see docs/README.md)
 ```
 
 ## Build (no Rust install needed on the host)
