@@ -1,0 +1,35 @@
+# 開發用容器：開一個常駐的 shell，進去之後直接 cargo build / cargo run。
+#
+#   docker compose up -d          # 啟動（第一次會 build image）
+#   docker compose exec dev bash  # 進入容器
+#   docker compose down           # 停止
+#
+# 改了 docker/cargo/Dockerfile 之後：docker compose up -d --build
+services:
+  dev:
+    build: docker/cargo
+    # 和 scripts/cargo 共用同一個 image
+    image: syncai-ble-cargo:latest
+    # Dockerfile 的 ENTRYPOINT 是 cargo，這裡換成 bash 讓容器常駐
+    entrypoint: ["bash"]
+    tty: true
+    stdin_open: true
+    # 用主機的 UID/GID 執行，target/ 才不會變成 root 擁有。
+    # bash 的 UID 沒有 export，所以預設給 1000（主機 syncrobotic）。
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /work
+    volumes:
+      # 整個專案掛進去（cargo 需要 Cargo.toml、Cargo.lock 和 src/）
+      - .:/work
+      # 主機的 system D-Bus，cargo run 時透過主機的 BlueZ 操作藍牙
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # 下載過的 crate 快取，重建容器也不用重新下載
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+
+volumes:
+  # 指定 name，跟 scripts/cargo 用的 volume 是同一個
+  cargo-registry:
+    name: syncai-ble-cargo-registry
+  cargo-git:
+    name: syncai-ble-cargo-git

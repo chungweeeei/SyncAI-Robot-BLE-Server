@@ -1,0 +1,15 @@
+# 允許 BLE server 透過 NetworkManager 掃描、連線、儲存 Wi-Fi 設定，不用輸入密碼。
+#
+# Ubuntu 22.04 的 polkit 是 0.105，只支援 .pkla（不支援 rules.d 的 JavaScript）。
+# 安裝：
+#   sudo install -m 644 deploy/polkit/50-syncai-ble-server.pkla /etc/polkit-1/localauthority/50-local.d/
+#   sudo systemctl restart polkit
+#
+# ResultAny 一定要是 yes：從容器、SSH、systemd 啟動的程式都不屬於「本機登入的 session」，
+# polkit 會套用 ResultAny 這一欄。
+[Allow SyncAI BLE server to manage Wi-Fi]
+Identity=unix-user:syncrobotic
+Action=org.freedesktop.NetworkManager.wifi.scan;org.freedesktop.NetworkManager.network-control;org.freedesktop.NetworkManager.settings.modify.system
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes

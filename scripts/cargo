@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# 在容器裡執行 cargo，用法跟 cargo 一樣：
+#   scripts/cargo build
+#   scripts/cargo clippy
+#   scripts/cargo test
+#   scripts/cargo run      # 透過主機的 BlueZ 跑 BLE server
+#
+# 第一次執行會自動 build image。改了 Dockerfile 之後要重建：
+#   CARGO_IMAGE_REBUILD=1 scripts/cargo build
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGE="${CARGO_IMAGE:-syncai-ble-cargo:latest}"
+
+if [[ -n "${CARGO_IMAGE_REBUILD:-}" ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    docker build -t "$IMAGE" "$REPO_ROOT/docker/cargo"
+fi
+
+# 有終端機才加 -t，這樣在 CI 或 pipe 裡也能用
+tty_flag=()
+[[ -t 0 && -t 1 ]] && tty_flag=(-t)
+
+# 掛入主機的 system D-Bus socket，讓 `scripts/cargo run` 能透過主機的 BlueZ 操作藍牙。
+# BlueZ 的 D-Bus policy 預設允許一般使用者，所以不用 root 也不用 --privileged。
+# --network host：讓 /proc/net/wireless 看得到主機的 Wi-Fi 網卡（讀取實際 RSSI dBm 用）。
+exec docker run --rm -i "${tty_flag[@]}" \
+    --user "$(id -u):$(id -g)" \
+    --network host \
+    -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
+    -v "$REPO_ROOT:/work" \
+    -v syncai-ble-cargo-registry:/usr/local/cargo/registry \
+    -v syncai-ble-cargo-git:/usr/local/cargo/git \
+    -w /work \
+    "$IMAGE" "$@"
