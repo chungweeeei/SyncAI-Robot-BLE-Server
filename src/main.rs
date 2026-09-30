@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let adv = Advertisement {
         service_uuids: vec![PRIMARY_SERVICE_UUID].into_iter().collect(),
         discoverable: Some(true),
-        local_name: Some(String::from("t")),
+        local_name: Some(String::from("test")),
         ..Default::default()
     };
     let adv_handle = adapter.advertise(adv).await?;

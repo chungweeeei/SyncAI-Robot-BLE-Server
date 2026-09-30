@@ -77,11 +77,7 @@ struct AvailableNetwork {
     secured: bool,
 }
 
-/// AvailableNetworks characteristic 的 control loop（IO 模式）。
-///
-/// IO 模式沒有 callback，改成從 `CharacteristicControl` 這個 stream 收事件：
-/// 每當有 client 訂閱，就會收到一個 `Notify(writer)`，
-/// 每個訂閱各自開一個背景 task 去掃描和送資料。
+
 pub async fn serve_available_networks(nm: NetworkManager, control: CharacteristicControl) {
     pin_mut!(control);
     while let Some(event) = control.next().await {
@@ -89,7 +85,6 @@ pub async fn serve_available_networks(nm: NetworkManager, control: Characteristi
             CharacteristicControlEvent::Notify(writer) => {
                 tokio::spawn(notify_available_networks(nm.clone(), writer));
             }
-            // 這個 characteristic 沒有開 write，理論上不會收到
             CharacteristicControlEvent::Write(req) => req.reject(ReqError::NotSupported),
         }
     }
@@ -170,8 +165,6 @@ pub async fn write_command(
     })?;
 
     match cmd {
-        // 注意：不要直接印出 cmd，Debug 會把密碼也印出來
-        // 先不真的切換網路，只確認 Command 有正確收到
         Command::SetWifi { id, ssid, .. } => {
             println!("[{id}] SetWifi received: ssid=\"{ssid}\"");
             Ok(())
