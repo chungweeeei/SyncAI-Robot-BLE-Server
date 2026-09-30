@@ -6,10 +6,8 @@
 
 | 文件 | 內容 |
 |---|---|
-| [01-rust-ble-libraries.md](01-rust-ble-libraries.md) | BLE 的 Central / Peripheral 角色、Rust BLE 函式庫比較、為什麼選 bluer |
 | [02-environment-setup.md](02-environment-setup.md) | Ubuntu 環境安裝、BlueZ 設定、在 UTM VM 上測試 |
 | [03-bluer-basics.md](03-bluer-basics.md) | bluer 的四層架構：Session → Adapter → Advertisement → GATT Application |
-| [04-gatt-server-cb-vs-io.md](04-gatt-server-cb-vs-io.md) | 官方範例 `gatt_server_cb.rs` 與 `gatt_server_io.rs` 的差異 |
 | [05-wifi-provisioning-design.md](05-wifi-provisioning-design.md) | 用 BLE 配置機器人網路設定的 GATT 設計 |
 | [06-rust-arc-mutex.md](06-rust-arc-mutex.md) | `Arc`、`Mutex`、RAII，以及跟 C++ / Python / Go 的比較 |
 

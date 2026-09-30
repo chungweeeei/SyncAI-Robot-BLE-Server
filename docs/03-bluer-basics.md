@@ -105,8 +105,6 @@ let _app_handle = adapter.serve_gatt_application(app).await?;   // 跟廣播一�
 - **Callback 模式**（`gatt_server_cb.rs`）：你提供函式，手機來讀寫時 bluer 會呼叫它。建議先學這個。
 - **IO 模式**（`gatt_server_io.rs`）：把 characteristic 當成串流，自己用 `read()` / `write()` 讀寫，效能較好。
 
-詳細比較請看 [04-gatt-server-cb-vs-io.md](04-gatt-server-cb-vs-io.md)。
-
 Callback 模式的寫入範例：
 
 ```rust
