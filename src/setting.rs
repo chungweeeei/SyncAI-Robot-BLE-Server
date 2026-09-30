@@ -13,9 +13,6 @@ pub enum Command {
         ssid: String,
         password: String
     },
-    ScanNetworks {
-        id: u8
-    },
     Disconnect {
         id: u8
     }
@@ -41,7 +38,7 @@ impl Command {
 
     pub fn id(&self) -> u8 {
         match self {
-            Self::SetWifi { id, .. } | Self::ScanNetworks { id, .. } | Self::Disconnect { id, .. } => *id,
+            Self::SetWifi { id, .. } | Self::Disconnect { id, .. } => *id,
         }
     }
 

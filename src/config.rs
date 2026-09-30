@@ -11,9 +11,9 @@ pub enum ServiceCharacteristicUUID {
 impl ServiceCharacteristicUUID {
     pub const fn uuid(&self) -> Uuid {
         match self {
-            self::Command => Uuid::from_u128(0x1234abcd-0000-0000-8000-00805f9b34fb),
-            self::NetworkStatus => Uuid::from_u128(0x1234abcd-0001-0000-8000-00805f9b34fb),
-            self::AvailableNetworks => Uuid::from_u128(0x1234abcd-0002-0000-8000-00805f9b34fb),
+            ServiceCharacteristicUUID::Command => Uuid::from_u128(0x1234abcd_0000_0000_8000_00805f9b34fb),
+            ServiceCharacteristicUUID::NetworkStatus => Uuid::from_u128(0x1234abcd_0001_0000_8000_00805f9b34fb),
+            ServiceCharacteristicUUID::AvailableNetworks => Uuid::from_u128(0x1234abcd_0002_0000_8000_00805f9b34fb),
         }
     }
 }
