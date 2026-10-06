@@ -14,7 +14,7 @@ use bluer::{
     },
 };
 use futures::FutureExt;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     sync::Mutex,
@@ -33,6 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let nm_for_read = nm.clone();
     let nm_for_notify = nm.clone();
     let nm_for_command = nm.clone();
+    // Shared by every Command write, so only one NM connect attempt runs at a time
+    let connect_lock: handler::ConnectLock = Arc::new(Mutex::new(()));
 
     // bluetooth bluer session
     let session= bluer::Session::new().await?;
@@ -71,7 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
                 write: Some(CharacteristicWrite {
                     write: true,
                     method: CharacteristicWriteMethod::Fun(Box::new(move |value, req| {
-                        handler::write_command(nm_for_command.clone(), value, req).boxed()
+                        handler::write_command(
+                            nm_for_command.clone(),
+                            connect_lock.clone(),
+                            value,
+                            req,
+                        )
+                        .boxed()
                     })),
                     ..Default::default()
                 }),
