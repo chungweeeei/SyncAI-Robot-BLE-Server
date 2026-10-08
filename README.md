@@ -24,7 +24,9 @@ Command format:
 
 - `ssid` must be 1-32 bytes and `password` at most 63 bytes; an empty password means an open network.
 - Malformed JSON returns `NotSupported`, an oversized command returns `InvalidValueLength`, and an invalid SSID/password returns `Failed`.
-- Current status: `set_wifi` is only parsed and validated (it doesn't switch networks yet), and `disconnect` is not implemented yet.
+- `set_wifi` is answered as soon as it has been validated and the connect runs in the background (NM can take up to 30 s, longer than the ATT timeout), so a successful write only means "accepted". Poll NetworkStatus for the result.
+- Only one connect runs at a time: a `set_wifi` arriving while another is still in flight returns `InProgress`.
+- Current status: `disconnect` is not implemented yet.
 
 ## Project layout
 

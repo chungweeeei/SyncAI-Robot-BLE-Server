@@ -25,13 +25,13 @@ scripts/cargo run        # uses the host's BlueZ / NM via the host D-Bus
 - `handler.rs`:
   - `read_network_status`: callback-mode read, returns JSON.
   - `serve_available_networks`: IO-mode notify; spawns one task per subscription: rescan → JSON → send in `writer.mtu()`-sized chunks, terminated by `\n`.
-  - `write_command`: callback-mode write, only parses/validates; slow operations (NM connect takes up to 30 s) must go to a background task, otherwise the 30 s ATT timeout is exceeded.
+  - `write_command`: callback-mode write; parses/validates, then `set_wifi` spawns `wifi::switch_network` in a background task and returns immediately, because NM connect takes up to 30 s and would exceed the 30 s ATT timeout. `ConnectLock` (an `Arc<Mutex<()>>` owned by `main`, held by the task for the whole attempt) keeps concurrent connects from racing; a write arriving meanwhile gets `InProgress`.
 - `setting.rs`: `Command` (serde `tag = "cmd"`, `snake_case`, `deny_unknown_fields`) and the `CommandError → ReqError` mapping.
 - `scan.rs`: `nm.scan_networks()` doesn't wait for the scan to finish, so it polls the D-Bus `LastScan` property, waiting up to 15 s.
 - `wifi.rs`: `switch_network`; an empty password means an open network, otherwise WPA-PSK.
 - `config.rs`: UUIDs. **`examples/gatt_client.rs` has a copy of the UUIDs** (the binary crate has no lib.rs), so keep both in sync when changing them.
 
-Current status: `set_wifi` only validates and doesn't call `wifi::switch_network` yet; `disconnect` returns `NotSupported`.
+Current status: `disconnect` returns `NotSupported`.
 
 ## Conventions
 

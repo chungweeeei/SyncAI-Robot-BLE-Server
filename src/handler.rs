@@ -11,14 +11,20 @@ use bluer::gatt::{
 };
 
 use futures::{StreamExt, pin_mut};
-use std::time::Duration;
-use tokio::time::sleep;
+use std::{sync::Arc, time::Duration};
+use tokio::{sync::Mutex, time::sleep};
 use nmrs::{NetworkManager, raw::zbus};
 use serde::Serialize;
 
 use crate::helper::parse_rssi_dbm;
 use crate::scan;
 use crate::setting::Command;
+use crate::wifi;
+
+/// Serializes the NM connect attempts started by `write_command`. The lock is held by the
+/// background task for the whole attempt, so a `SetWifi` arriving meanwhile is rejected
+/// instead of racing the one in flight.
+pub type ConnectLock = Arc<Mutex<()>>;
 
 #[derive(Debug, Serialize)]
 struct NetworkStatus {
@@ -143,11 +149,13 @@ async fn notify_available_networks(nm: NetworkManager, writer: CharacteristicWri
 
 /// Write callback for the Command characteristic.
 ///
-/// Only parses and validates the Command, returning an error to the phone if it's malformed.
+/// Parses and validates the Command, returning an error to the phone if it's malformed.
 /// Slow operations (connecting can take up to 30 s) go to a background task and this returns
-/// Ok immediately, to stay within the 30 s ATT timeout.
+/// Ok immediately, to stay within the 30 s ATT timeout; the phone polls `NetworkStatus` for the
+/// outcome.
 pub async fn write_command(
-    _nm: NetworkManager,
+    nm: NetworkManager,
+    connect_lock: ConnectLock,
     value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
@@ -165,8 +173,21 @@ pub async fn write_command(
     })?;
 
     match cmd {
-        Command::SetWifi { id, ssid, .. } => {
-            println!("[{id}] SetWifi received: ssid=\"{ssid}\"");
+        Command::SetWifi { id, ssid, password } => {
+            // The lock is released when the spawned task ends, i.e. after NM finished
+            let Ok(guard) = connect_lock.try_lock_owned() else {
+                println!("[{id}] SetWifi rejected: a connect attempt is still running");
+                return Err(ReqError::InProgress);
+            };
+
+            println!("[{id}] SetWifi received: ssid=\"{ssid}\", connecting in background");
+            tokio::spawn(async move {
+                match wifi::switch_network(&nm, &ssid, &password).await {
+                    Ok(()) => println!("[{id}] Connected to \"{ssid}\""),
+                    Err(e) => println!("[{id}] Failed to connect to \"{ssid}\": {e}"),
+                }
+                drop(guard);
+            });
             Ok(())
         }
         Command::Disconnect { id } => {
