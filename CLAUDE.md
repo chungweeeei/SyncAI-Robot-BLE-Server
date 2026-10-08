@@ -4,7 +4,7 @@ A BLE GATT server (Rust) running on the robot that lets a phone query/configure 
 
 ## Common commands
 
-Rust is not installed on the host; always run cargo through the container (the image is built automatically on first run):
+Always run cargo through the container (the image is built automatically on first run). `bluer` has a `compile_error!` for non-Linux targets, so the crate can't be built on a macOS host even when a toolchain is installed there:
 
 ```bash
 scripts/cargo build
@@ -16,6 +16,7 @@ scripts/cargo run        # uses the host's BlueZ / NM via the host D-Bus
 
 - After changing `docker/cargo/Dockerfile`: `CARGO_IMAGE_REBUILD=1 scripts/cargo build`
 - On a macOS dev machine, BLE / NM features can't actually run; only build, clippy and unit tests.
+- Open the repo in the dev container (`.devcontainer/`, same image as `scripts/cargo`) so rust-analyzer runs on Linux; on a macOS host it can't resolve `bluer` and flags every `use bluer::...`. See "VS Code / rust-analyzer" in the README.
 - For on-device testing, run `cargo run --example gatt_client -- <status|scan|set|disconnect|raw>` on a separate Linux machine.
 - `not authorized` errors from NM operations are polkit permission issues; see "NetworkManager permissions" in the README.
 

@@ -1,0 +1,31 @@
+{
+  // Runs the editor (and therefore rust-analyzer) inside the same ubuntu:22.04 image as
+  // scripts/cargo. `bluer` has a compile_error! for non-Linux targets, so on a macOS host
+  // rust-analyzer can't resolve it and every `use bluer::...` shows up as an error.
+  "name": "SyncAI BLE Server",
+  "build": {
+    "dockerfile": "../docker/cargo/Dockerfile",
+    "context": "../docker/cargo"
+  },
+
+  // The image's ENTRYPOINT is `cargo`; let the Dev Containers extension replace it with a
+  // keep-alive command so the container stays up.
+  "overrideCommand": true,
+
+  // Mount at /work, the same path scripts/cargo uses, so both share target/ without
+  // invalidating build fingerprints (absolute paths end up in the artifacts).
+  "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind,consistency=cached",
+  "workspaceFolder": "/work",
+
+  // Same crate download cache as scripts/cargo, so nothing is re-fetched
+  "mounts": [
+    "source=syncai-ble-cargo-registry,target=/usr/local/cargo/registry,type=volume",
+    "source=syncai-ble-cargo-git,target=/usr/local/cargo/git,type=volume"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"]
+    }
+  }
+}

@@ -20,7 +20,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --no-modify-path --profile minimal \
             --default-toolchain "${RUST_VERSION}" \
-            --component clippy,rustfmt \
+            --component clippy,rustfmt,rust-analyzer \
     && rustc --version && cargo --version
 
 RUN mkdir -p "${CARGO_HOME}/registry" "${CARGO_HOME}/git" \
