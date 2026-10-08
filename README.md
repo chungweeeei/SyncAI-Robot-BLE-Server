@@ -42,7 +42,8 @@ src/
 examples/
   gatt_client.rs   GATT client for testing
 deploy/polkit/     polkit rule for NetworkManager
-docker/cargo/      cargo dev container
+docker/cargo/      cargo dev container image
+.devcontainer/     VS Code dev container (reuses the image above)
 ```
 
 ## Build (no Rust install needed on the host)
@@ -65,6 +66,19 @@ scripts/cargo build && ./target/debug/SyncAI-Robot-BLE-Server   # run directly o
 - The image (`docker/cargo/Dockerfile`) is built automatically on first run. After changing the Dockerfile, rebuild with `CARGO_IMAGE_REBUILD=1 scripts/cargo build`.
 - The image is based on `ubuntu:22.04`, matching the host's glibc, so the built `target/debug/SyncAI-Robot-BLE-Server` runs directly on the host (BLE needs the host's BlueZ).
 - The crate download cache lives in the docker volumes `syncai-ble-cargo-registry` / `syncai-ble-cargo-git`.
+
+## VS Code / rust-analyzer
+
+`bluer` starts with a `compile_error!` for non-Linux targets, so on a macOS host rust-analyzer can't build the crate and reports errors on every `use bluer::...`:
+
+```
+error: BlueR only supports the Linux operating system.
+error[E0432]: unresolved imports `libc::AF_BLUETOOTH`, `libc::SOL_BLUETOOTH`, `libc::TIOCINQ`
+```
+
+The fix is to run the editor inside Linux. With the **Dev Containers** extension (`ms-vscode-remote.remote-containers`) installed, open the Command Palette → **Dev Containers: Reopen in Container**. `.devcontainer/devcontainer.json` reuses `docker/cargo/Dockerfile`, mounts the repo at `/work` (the same path as `scripts/cargo`, so `target/` stays usable from both) and shares the same crate cache volumes.
+
+Setting `rust-analyzer.cargo.target` to a Linux triple is **not** a workaround: that needs the Linux `std` installed with `rustup target add`, which a Homebrew-installed Rust (no rustup) can't do.
 
 ## NetworkManager permissions (polkit)
 
